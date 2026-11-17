@@ -130,3 +130,45 @@ test("instalar e desinstalar de verdade: serviço no ar, financeiro antigo guard
   await new Promise((r) => setTimeout(r, 300));
   await assert.rejects(fetch(`http://127.0.0.1:${porta}/v1/saude`), "o serviço parou");
 });
+
+test("pontes com o CRM pelo HTTP do backend: venda concluída vira entrada; escrita no Finanças sobe o pipeline de investimentos; seq igual não relê; 403 fica quieto", async () => {
+  const { crmHttp, ligarPontes } = require(join(MOD, "servico/pontes-crm.js"));
+  const { criarServidor } = require(join(MOD, "servico/servidor.js"));
+  const HOME = mkdtempSync(join(tmpdir(), "fin-crm-"));
+  const pipeline = { key: "p_vendas", name: "Vendas", stages: [{ key: "s_neg", name: "Negociando" }, { key: "s_vend", name: "Vendido" }], fields: [{ key: "f_prod", name: "Produto", type: "TEXT" }, { key: "f_valor", name: "Valor", type: "TEXT" }, { key: "f_cli", name: "Cliente", type: "TEXT" }] };
+  const box = { key: "bx1", pipelineKey: "p_vendas", name: "Venda da Ana", stageKey: "s_vend", fields: { f_prod: "Camiseta", f_valor: "120", f_cli: "Ana" }, contatos: [], createdAt: Date.parse("2026-11-10T12:00:00Z"), updatedAt: Date.parse("2026-11-10T12:00:00Z"), etapaDesde: Date.parse("2026-11-10T12:00:00Z") };
+  const chamadas = []; let proibido = false;
+  const crmFalso = (await import("node:http")).createServer((req, res) => {
+    let s = ""; req.on("data", (c) => { s += c; }); req.on("end", () => {
+      chamadas.push(`${req.method} ${req.url}`);
+      const j = (st, b) => { res.writeHead(st, { "content-type": "application/json" }); res.end(JSON.stringify(b)); };
+      if (req.headers.authorization !== "Bearer kb") return j(401, { error: { message: "chave" } });
+      if (proibido) return j(403, { error: { message: "o CRM precisa do Pro" } });
+      if (req.url === "/v1/crm/status") return j(200, { seq: 7 });
+      if (req.url === "/v1/crm/export") return j(200, { seq: 7, pipelines: [pipeline], boxes: [box], contatos: [] });
+      if (req.url === "/v1/crm/import" && req.method === "POST") { const b = JSON.parse(s); return j(200, { pipeline: { key: b.pipeline.key } }); }
+      j(404, { error: { message: "rota" } });
+    });
+  }).listen(0, "127.0.0.1");
+  await new Promise((r) => crmFalso.once("listening", r));
+  const srv = criarServidor({ licenca: { atualizar: async () => {}, ok: () => true }, dir: join(HOME, "db") });
+  const logs = [];
+  const pontes = ligarPontes({ financeApi: srv.financeApi, liberado: () => true, crm: crmHttp({ key: "kb", host: "127.0.0.1", port: crmFalso.address().port }), log: (m) => logs.push(m), intervaloMs: 1e9, atrasoMs: 1e9, esperaEscritaMs: 10 });
+  try {
+    await pontes.rodadaVendas();
+    const vendas = srv.financeApi().store.listLanc().filter((l) => String(l.ref ?? l.externo ?? "").startsWith("crm:") || l.origem === "crm");
+    assert.equal(vendas.length, 1, JSON.stringify(logs));
+    assert.equal(vendas[0].valorCent, 12000);
+    assert.equal(vendas[0].produto, "Camiseta");
+    const exports = () => chamadas.filter((c) => c === "GET /v1/crm/export").length;
+    assert.equal(exports(), 1);
+    await pontes.rodadaVendas();
+    assert.equal(exports(), 1, "seq igual: não relê o CRM");
+    pontes.aposEscrita();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(chamadas.includes("POST /v1/crm/import"), "investimentos subiram para o CRM");
+    proibido = true; chamadas.length = 0;
+    await pontes.rodadaVendas(); await pontes.rodadaVendas();
+    assert.equal(logs.filter((l) => /em espera/.test(l)).length, 1, "sem o Pro: avisa uma vez e fica quieto");
+  } finally { pontes.parar(); crmFalso.close(); }
+});

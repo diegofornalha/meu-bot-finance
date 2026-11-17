@@ -13,6 +13,10 @@ licença pelo backend do meu-bot.
   - **Acesso:** só entra quem traz o token desta instalação, que o app cria ao ligar o módulo.
   - **Página:** recebe o token uma vez na URL e passa a usar um cookie `HttpOnly`.
   - **Agente:** o plugin e a CLI usam `Authorization: Bearer`.
+- `financas/servico/pontes-crm.js` traz as pontes com o CRM do meu-bot, pela API HTTP do backend.
+  - **Vendas, do CRM para o Finanças:** a cada 2 min, só quando o CRM mudou.
+  - **Investimentos & ROI, do Finanças para o CRM:** depois de cada escrita no Finanças.
+  - As duas exigem o CRM do plano Pro na máquina.
 - `financas/pagina/` é a página (HTML, JS e CSS sem build), aberta pelo app num `<webview>` isolado.
 - `financas/plugin/` traz o plugin `meu-bot-finance` do OpenClaw (WhatsApp) e a CLI `finance.mjs` do agente.
 - `financas/skill-finance-api.md` é a skill que ensina o agente a usar a CLI.

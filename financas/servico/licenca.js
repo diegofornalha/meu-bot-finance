@@ -65,4 +65,4 @@ function createLicenca({ ler = () => lerDoBackend(backendEnv()), agora = () => D
   };
 }
 
-module.exports = { createLicenca, produtoOk, PRODUTO };
+module.exports = { createLicenca, produtoOk, backendEnv, PRODUTO };

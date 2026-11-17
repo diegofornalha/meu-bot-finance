@@ -19,7 +19,8 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createFinanceApi } = require('./finance-api');
-const { createLicenca } = require('./licenca');
+const { createLicenca, backendEnv } = require('./licenca');
+const { crmHttp, ligarPontes } = require('./pontes-crm');
 
 const HOME = os.homedir();
 const PORTA = Number(process.env.FINANCAS_PORTA || 18795);
@@ -79,10 +80,11 @@ function servirArquivo(res, rota) {
   res.end(data);
 }
 
-function criarServidor({ licenca = createLicenca({ log }), dir = DB, now } = {}) {
+/** `aposEscrita`: chamado depois de cada POST/PUT no Finanças que deu certo (a ponte Finanças → CRM). */
+function criarServidor({ licenca = createLicenca({ log }), dir = DB, now, aposEscrita = () => {} } = {}) {
   let api = null;
   const financeApi = () => { api ??= createFinanceApi({ dir, licenseOk: () => licenca.ok(), json, readBody, log, ...(now ? { now } : {}) }); return api; };
-  return http.createServer((req, res) => {
+  const srv = http.createServer((req, res) => {
     let url;
     try { url = new URL(req.url, 'http://127.0.0.1'); } catch { return json(res, 400, { error: { message: 'endereço inválido' } }); }
     // Entrada da página: troca o ?token= por um cookie e tira o token da URL.
@@ -96,17 +98,23 @@ function criarServidor({ licenca = createLicenca({ log }), dir = DB, now } = {})
     }
     if (!autorizado(req)) return json(res, 401, { error: { message: 'chave de acesso ausente ou inválida: abra o Finanças pela página Módulos do meu-bot', code: 'sem_acesso' } });
     if (url.pathname === '/v1/finance' || url.pathname.startsWith('/v1/finance/')) {
-      licenca.atualizar().then(() => financeApi().handle(req, res, url)).catch((e) => { log(`finance falhou: ${e.stack || e.message}`); if (!res.headersSent) json(res, 500, { error: { message: e.message, type: 'server_error' } }); });
+      const mut = req.method === 'POST' || req.method === 'PUT';
+      licenca.atualizar().then(() => financeApi().handle(req, res, url)).then(() => { if (mut && res.statusCode === 200) aposEscrita(); }).catch((e) => { log(`finance falhou: ${e.stack || e.message}`); if (!res.headersSent) json(res, 500, { error: { message: e.message, type: 'server_error' } }); });
       return;
     }
     if (url.pathname === '/v1/saude' && req.method === 'GET') return licenca.atualizar().then(() => json(res, 200, { ok: true, licenca: licenca.ok() }));
     if (req.method === 'GET') return servirArquivo(res, url.pathname);
     return json(res, 405, { error: { message: 'método não permitido' } });
   });
+  srv.financeApi = financeApi;
+  srv.licenca = licenca;
+  return srv;
 }
 
 if (require.main === module) {
-  const srv = criarServidor();
+  let pontes = null;
+  const srv = criarServidor({ aposEscrita: () => pontes?.aposEscrita() });
+  pontes = ligarPontes({ financeApi: srv.financeApi, liberado: () => srv.licenca.ok(), crm: crmHttp(backendEnv()), log });
   srv.listen(PORTA, '127.0.0.1', () => log(`financas: ouvindo em 127.0.0.1:${PORTA} (db ${DB})`));
   srv.on('error', (e) => { log(`financas: não subiu: ${e.message}`); process.exit(1); });
 }
