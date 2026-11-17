@@ -80,6 +80,20 @@ function servirArquivo(res, rota) {
   res.end(data);
 }
 
+/** O resultado da importação no contrato do meu-bot: a frase, umas linhas de amostra e se dá para importar. */
+function respostaPlanilha(r) {
+  const dataCurta = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const partes = [`${r.lidas} linha(s) lida(s)`, r.jaImportadas > 0 ? `${r.jaImportadas} já importada(s)` : '', r.totalErros > 0 ? `${r.totalErros} com problema` : ''].filter(Boolean).join(' · ');
+  const mensagem = r.simulado
+    ? `Prévia: ${r.aImportar} lançamento(s) a importar (${partes}). Colunas: ${Object.values(r.colunas || {}).join(', ') || 'nenhuma reconhecida'}.`
+    : `Importado: ${r.importadas} lançamento(s) (${partes}).`;
+  const linhas = [
+    ...r.erros.slice(0, 3).map((e) => `linha ${e.linha}: ${e.motivo}`),
+    ...r.amostra.slice(0, 5).map((l) => `${dataCurta(l.data)} · ${l.favorecido} · ${l.valorExib} · ${l.categoriaNome}`),
+  ];
+  return { mensagem, linhas, podeImportar: r.simulado && r.aImportar > 0 };
+}
+
 /** `aposEscrita`: chamado depois de cada POST/PUT no Finanças que deu certo (a ponte Finanças → CRM). */
 function criarServidor({ licenca = createLicenca({ log }), dir = DB, now, aposEscrita = () => {} } = {}) {
   let api = null;
@@ -100,6 +114,24 @@ function criarServidor({ licenca = createLicenca({ log }), dir = DB, now, aposEs
     if (url.pathname === '/v1/finance' || url.pathname.startsWith('/v1/finance/')) {
       const mut = req.method === 'POST' || req.method === 'PUT';
       licenca.atualizar().then(() => financeApi().handle(req, res, url)).then(() => { if (mut && res.statusCode === 200) aposEscrita(); }).catch((e) => { log(`finance falhou: ${e.stack || e.message}`); if (!res.headersSent) json(res, 500, { error: { message: e.message, type: 'server_error' } }); });
+      return;
+    }
+    // Planilha do Google que o meu-bot leu (depois da confirmação da pessoa): só o app, pelo bearer, nunca pelo cookie da
+    // página. Responde o contrato do meu-bot (`{mensagem, linhas, podeImportar}`): a prévia com `simular`, e importa sem.
+    if (url.pathname === '/__meu-bot/planilha' && req.method === 'POST') {
+      const auth = String(req.headers.authorization || '');
+      if (!auth.startsWith('Bearer ') || !igual(auth.slice(7).trim(), tokenAtual())) return json(res, 401, { error: { message: 'só o meu-bot entrega planilhas', code: 'sem_acesso' } });
+      licenca.atualizar().then(async () => {
+        if (!licenca.ok()) return json(res, 403, { error: { message: 'o Finanças precisa do add-on meu-bot-finance nesta máquina, ou a licença venceu', code: 'finance_license' } });
+        let b;
+        try { b = JSON.parse(await readBody(req, 8 * 1024 * 1024)); } catch { return json(res, 400, { error: { message: 'JSON inválido' } }); }
+        if (b === null || typeof b !== 'object' || !Array.isArray(b.valores)) return json(res, 400, { error: { message: 'faltam as células da planilha' } });
+        try {
+          const r = await financeApi().importar({ valores: b.valores, fonte: b.fonte, tipo: b.tipo, simular: b.simular === true }, 'app');
+          if (!r.simulado && r.importadas > 0) aposEscrita();
+          return json(res, 200, respostaPlanilha(r));
+        } catch (e) { return json(res, 400, { error: { message: e instanceof Error ? e.message : String(e) } }); }
+      }).catch((e) => { log(`planilha falhou: ${e.stack || e.message}`); if (!res.headersSent) json(res, 500, { error: { message: e.message } }); });
       return;
     }
     if (url.pathname === '/v1/saude' && req.method === 'GET') return licenca.atualizar().then(() => json(res, 200, { ok: true, licenca: licenca.ok() }));

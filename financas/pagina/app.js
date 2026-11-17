@@ -148,8 +148,26 @@ let aba = "geral";
 const abcF = { lado: "venda", por: "produto", meses: 3 };
 let abc = null; let abcErro = null; let abcCarregando = false;
 
-// Importar do Google Sheets (financeImportarPlanilha / cardImportar) não foi portado: a leitura da planilha usa a
-// Conta Google do app (no Mac), que esta página isolada não tem.
+// Importar do Google Sheets: a página só pede (ação /__meu-bot/acao?acao=planilha). O meu-bot mostra um cartão acima
+// da página, lê a planilha com a Conta Google dele depois do clique da pessoa e entrega as células ao serviço
+// (POST /__meu-bot/planilha), que devolve a prévia e importa. Ao voltar o foco, a página relê os números.
+const imp = { link: "", aba: "", tipo: "venda" };
+function cardImportar() {
+  const c = card("Importar do Google Sheets");
+  c.append(el("p", "hint", "Vendas (ou compras) numa planilha do Google, uma linha por item: colunas Data, Cliente (ou Fornecedor), Produto, Quantidade e Valor; Categoria, Tipo e Obs são opcionais. Compartilhe a planilha com a conta Google conectada no meu-bot. Importar de novo a mesma planilha só traz as linhas novas."));
+  const link = input("link da planilha (docs.google.com/spreadsheets/d/…)", imp.link, 500); link.addEventListener("input", () => { imp.link = link.value; });
+  const aba = input("aba (vazio = a primeira)", imp.aba, 100); aba.addEventListener("input", () => { imp.aba = aba.value; });
+  const tipo = el("select"); for (const [v, r] of [["compra", "Compras (saídas)"], ["venda", "Vendas (entradas)"]]) tipo.append(option(v, r, imp.tipo === v));
+  tipo.addEventListener("change", () => { imp.tipo = tipo.value; });
+  const f = el("div", "admin-actions");
+  f.append(field("Planilha", link), field("Aba", aba), field("O quê", tipo), btn("Ler pela Conta Google do meu-bot", "btn-ghost", () => {
+    if (imp.link.trim() === "") return;
+    window.open(`/__meu-bot/acao?acao=planilha&link=${encodeURIComponent(imp.link.trim())}&aba=${encodeURIComponent(imp.aba.trim())}&tipo=${imp.tipo}`);
+  }));
+  c.append(f, el("p", "hint", "O meu-bot pede a sua confirmação num cartão acima desta página e mostra a prévia antes de importar."));
+  return c;
+}
+window.addEventListener("focus", () => { if (!busy) { void refresh(); if (aba === "abc" && abc !== null) void carregarAbc(); } });
 
 async function carregarAbc() {
   abcCarregando = true; abcErro = null; render();
@@ -487,7 +505,6 @@ function render() {
 
 /** Submódulo Curva ABC: filtros (compras/vendas, por quem ou por categoria, período), resumo das classes e a tabela. */
 function renderAbc() {
-  // O cartão "Importar do Google Sheets" ficava aqui, ao lado da curva; não portado (Conta Google do app).
   const filtros = el("div", "admin-actions");
   const sel = (opts, atual, set) => {
     const s = el("select"); for (const [v, r] of opts) s.append(option(v, r, v === atual));
@@ -501,7 +518,7 @@ function renderAbc() {
   );
   const c = card("Curva ABC"); c.append(filtros);
   c.append(el("p", "hint", "Classe A: os poucos itens que somam até 80% do valor. B: até 95%. C: o resto (muitos itens, pouco valor)."));
-  panel.append(c);
+  panel.append(c, cardImportar());
   if (abcErro !== null) { c.append(el("p", "hint bad-hint", abcErro)); return; }
   if (abc === null) { c.append(abcCarregando ? carregando("Calculando a Curva ABC…") : el("p", "hint", "Escolha os filtros.")); return; }
   const quem = abc.por === "produto" ? "produtos" : abc.por === "categoria" ? "categorias" : abc.lado === "venda" ? "clientes" : "fornecedores";

@@ -416,7 +416,7 @@ function createFinanceApi(deps) {
     }
   }
 
-  return { handle, store, estado, contexto, sincronizarExternos };
+  return { handle, store, estado, contexto, sincronizarExternos, importar };
 }
 
 module.exports = { createFinanceApi };

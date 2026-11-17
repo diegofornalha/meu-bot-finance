@@ -172,3 +172,32 @@ test("pontes com o CRM pelo HTTP do backend: venda concluída vira entrada; escr
     assert.equal(logs.filter((l) => /em espera/.test(l)).length, 1, "sem o Pro: avisa uma vez e fica quieto");
   } finally { pontes.parar(); crmFalso.close(); }
 });
+
+test("planilha entregue pelo meu-bot: só pelo bearer; prévia, importa e não repete na segunda vez", async () => {
+  const HOME = mkdtempSync(join(tmpdir(), "fin-plan-"));
+  const arq = join(HOME, "pagina.token"); writeFileSync(arq, TOKEN, { mode: 0o600 });
+  process.env.MODULO_PAGINA_TOKEN = arq;
+  const { criarServidor } = require(join(MOD, "servico/servidor.js"));
+  const srv = criarServidor({ licenca: { atualizar: async () => {}, ok: () => true }, dir: join(HOME, "db") }).listen(0, "127.0.0.1");
+  await new Promise((r) => srv.once("listening", r));
+  const url = `http://127.0.0.1:${srv.address().port}/__meu-bot/planilha`;
+  const valores = [["Data", "Cliente", "Produto", "Quantidade", "Valor"], ["10/11/2026", "Ana", "Camiseta", "2", "120,00"], ["11/11/2026", "Bia", "Boné", "1", "45,00"]];
+  const post = async (simular, headers = { authorization: `Bearer ${TOKEN}` }) => { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ valores, fonte: "sheets:teste", tipo: "venda", simular }) }); return { status: r.status, j: await r.json() }; };
+  try {
+    const entra = await fetch(`http://127.0.0.1:${srv.address().port}/?token=${TOKEN}`, { redirect: "manual" });
+    const cookie = entra.headers.get("set-cookie").split(";")[0];
+    assert.equal((await post(true, { cookie })).status, 401, "a página não entrega planilha pelo cookie");
+    const previa = await post(true);
+    assert.equal(previa.status, 200, JSON.stringify(previa.j));
+    assert.match(previa.j.mensagem, /^Prévia: 2 lançamento/);
+    assert.equal(previa.j.podeImportar, true);
+    assert.equal(srv.financeApi().store.listLanc().length, 0, "a prévia não grava");
+    const feito = await post(false);
+    assert.match(feito.j.mensagem, /^Importado: 2 lançamento/);
+    assert.equal(feito.j.podeImportar, false);
+    assert.equal(srv.financeApi().store.listLanc().length, 2);
+    const de_novo = await post(true);
+    assert.match(de_novo.j.mensagem, /0 lançamento\(s\) a importar .*2 já importada/);
+    assert.equal(de_novo.j.podeImportar, false);
+  } finally { srv.close(); }
+});
