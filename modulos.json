@@ -1,0 +1,38 @@
+{
+  "produto": "meu-bot-finance",
+  "modulos": [
+    {
+      "id": "financas",
+      "rotulo": "Finanças",
+      "descricao": "O agente vira o seu financeiro: você conta o gasto (ou manda a foto do comprovante) e ele lança, categoriza e só pede o que depende de você. Página própria com o mês, as contas, o DRE e a Curva ABC.",
+      "versao": "2.0.0",
+      "pasta": "financas",
+      "testar": "testar.sh",
+      "categoria": "Finanças",
+      "exemplos": ["gastei 48 no mercado", "recebi 3.000 do salário", "quanto gastei este mês?", "meu orçamento do mês é 3.000", "o que está pendente no financeiro?", "fecha o mês passado"],
+      "pagina": { "rotulo": "Finanças", "porta": 18795, "caminho": "/" },
+      "requisitos": ["Backend do meu-bot atualizado (a licença é lida dele)", "WhatsApp pelo OpenClaw para lançar pelo WhatsApp (sem ele, o Finanças funciona pelo chat do app e pela página)"],
+      "guia": {
+        "paraQue": "Seu financeiro pessoal no WhatsApp e no chat do app: o agente lança gastos e rendas, lê comprovantes, separa por categoria e conta, acompanha o orçamento do mês e cobra só o que depende de você.",
+        "cuidados": [
+          "Seus números ficam só na máquina (pasta finance/db), com cópia no Google Drive se o backup estiver ligado.",
+          "Desligar o módulo não apaga nada: o financeiro volta para a página Finanças de antes, com os mesmos dados.",
+          "Lançamento com dúvida (categoria nova, foto, possível repetição) espera você confirmar na página."
+        ],
+        "texto": [
+          "Contas: diga quais você usa (o banco, o cartão de crédito e o dinheiro vivo). O agente lança em cada uma pelo jeito de pagar (\"no crédito\", \"em dinheiro\").",
+          "Orçamento: só você decide quanto quer gastar no mês. O agente acompanha os gastos contra ele e avisa aos 80% e se estourar; no mês seguinte ele continua o mesmo até você mudar.",
+          "Foto de comprovante: mande para o agente no WhatsApp. Ele lê o valor, a data e o lugar e deixa para você confirmar.",
+          "Pendências: quando o agente fica na dúvida, o lançamento espera você na página. Confirmando, ele aprende e da próxima vez acerta sozinho."
+        ]
+      },
+      "passos": [
+        { "id": "ligar", "titulo": "Ligar o Finanças nesta máquina", "texto": "Sobe o serviço do Finanças na máquina, com a página, a ferramenta do agente e o financeiro do WhatsApp. Seus números ficam só nela.", "conclui": "ligado" },
+        { "id": "testar", "titulo": "Testar a conexão", "texto": "Confere se o serviço responde e se a licença desta máquina libera o Finanças.", "conclui": "testado" },
+        { "id": "contas", "titulo": "Cadastrar suas contas", "texto": "Diga ao agente quais contas você usa: o banco, o cartão e o dinheiro vivo.", "conclui": "manual", "botao": "Já cadastrei", "pergunta": "Quero cadastrar minhas contas no financeiro: " },
+        { "id": "orcamento", "titulo": "Dizer quanto quer gastar no mês", "texto": "O agente acompanha os gastos contra o orçamento e avisa aos 80% e se estourar.", "conclui": "manual", "botao": "Já defini", "pergunta": "Meu orçamento para gastar este mês é " },
+        { "id": "primeiro", "titulo": "Lançar o primeiro gasto", "texto": "Mande no WhatsApp, para você mesmo, ou no chat do app: \"gastei 48 no mercado\". O agente lança, categoriza e responde.", "conclui": "manual", "botao": "Já lancei", "pergunta": "gastei 48 no mercado" }
+      ]
+    }
+  ]
+}
