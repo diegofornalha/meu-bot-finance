@@ -187,7 +187,18 @@ const selectCategoria = (atual, renda) => {
   return s;
 };
 /** Onde a página do app tinha um botão que levava ao chat: aqui vira dica (a página isolada não fala com o app). */
-const dicaAgente = (frase, extra) => el("p", "hint finance-dica", `Diga ao agente (WhatsApp ou chat do meu-bot): “${frase}”${extra ? `. ${extra}` : ""}`);
+/**
+ * Pergunta pronta para o agente: o botão pede ao meu-bot (a única ponte da página com o app, /__meu-bot/acao) que ponha
+ * o texto na caixa do chat; quem envia é a pessoa. Fora do app (sem a ponte), fica a dica para dizer no WhatsApp.
+ */
+function dicaAgente(frase, extra) {
+  const box = el("div", "finance-dica");
+  box.append(el("p", "hint", `Diga ao agente (WhatsApp ou chat do meu-bot): “${frase}”${extra ? `. ${extra}` : ""}`));
+  const b = el("button", "btn btn-ghost btn-small", "Levar ao chat do meu-bot"); b.type = "button";
+  b.addEventListener("click", () => { window.open(`/__meu-bot/acao?acao=chat&texto=${encodeURIComponent(frase)}`); });
+  box.append(b);
+  return box;
+}
 
 /** Cartões recolhíveis (Contas, Lançar à mão): fechados por padrão; o que a pessoa abriu continua aberto ao repintar. */
 const abertos = new Set();
