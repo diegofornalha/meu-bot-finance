@@ -22,11 +22,12 @@ licença pelo backend do meu-bot.
 - `financas/skill-finance-api.md` é a skill que ensina o agente a usar a CLI.
 - `financas/instalar.sh`, `desinstalar.sh` e `testar.sh` são os scripts que o meu-bot roda na máquina por SSH.
 
-## Dados e convivência com o financeiro antigo
+## Dados
 - **Dados:** continuam em `~/.local/share/meu-bot/finance/db` e o módulo nunca os apaga.
-- **Ao ligar:** os arquivos do plugin antigo vão para `finance/.antes`. O marcador `finance/MODULO` faz o backend do
-  meu-bot parar de gravar nos dados (ele responde 409 `finance_modulo`).
-- **Ao desligar:** tudo volta a ser como antes.
+- **O financeiro antigo saiu do meu-bot** (issue #312 de lá): este módulo é o único Finanças. O backend do meu-bot
+  responde 409 `finance_modulo` em `/v1/finance/*`, com a frase que manda ligar o módulo.
+- **Ao ligar:** o plugin e a CLI são gravados na pasta de sempre (`finance/`), por cima do que havia.
+- **Ao desligar:** o serviço para e o plugin do WhatsApp é desligado. Os dados ficam; ligar de novo os traz de volta.
 
 ## Testes
 ```

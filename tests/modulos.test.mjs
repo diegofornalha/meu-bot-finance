@@ -90,7 +90,7 @@ test("serviço: só com o token; ?token= vira cookie e sai da URL; licença conf
   } finally { srv.close(); delete process.env.FINANCAS_PORTA; }
 });
 
-test("instalar e desinstalar de verdade: serviço no ar, financeiro antigo guardado e devolvido, dados intactos", { skip: spawnSync("bash", ["-c", "command -v node"]).status !== 0 }, async () => {
+test("instalar e desinstalar de verdade: serviço no ar, o plugin antigo é trocado e não volta ao desligar, dados intactos", { skip: spawnSync("bash", ["-c", "command -v node"]).status !== 0 }, async () => {
   const HOME = mkdtempSync(join(tmpdir(), "fin-inst-"));
   const FIN = join(HOME, ".local/share/meu-bot/finance");
   const MODULO_DIR = join(HOME, ".local/share/meu-bot/modulos/financas");
@@ -98,15 +98,18 @@ test("instalar e desinstalar de verdade: serviço no ar, financeiro antigo guard
   writeFileSync(join(FIN, "backend.mjs"), "// antigo\n");
   writeFileSync(join(FIN, "package.json"), '{"version":"1.4.0"}\n');
   writeFileSync(join(FIN, "db", "lancamentos.json"), "[]\n");
+  // Sobra de uma versão anterior deste instalador, que guardava o plugin antigo para devolver.
+  mkdirSync(join(FIN, ".antes")); writeFileSync(join(FIN, ".antes", "backend.mjs"), "// antigo\n");
   const tok = join(MODULO_DIR, "pagina.token"); writeFileSync(tok, TOKEN, { mode: 0o600 });
   const porta = await portaLivre();
   // Sem systemd de usuário (o macOS não tem): o instalador cai no nohup. Sem OpenClaw: termina sem o WhatsApp.
   const env = { ...process.env, HOME, MODULO_DIR, MODULO_PAGINA_TOKEN: tok, MODULO_ID: "financas", MODULO_PRODUTO: "meu-bot-finance", FINANCAS_PORTA: String(porta), PATH: `${join(process.execPath, "..")}:/usr/bin:/bin` };
+  let des;
   const inst = spawnSync("bash", [join(MOD, "instalar.sh")], { cwd: MOD, env, encoding: "utf8", timeout: 60_000 });
   try {
     assert.equal(inst.status, 0, inst.stdout + inst.stderr);
     assert.equal(readFileSync(join(FIN, "MODULO"), "utf8").trim(), "financas");
-    assert.equal(readFileSync(join(FIN, ".antes", "backend.mjs"), "utf8"), "// antigo\n", "o antigo guardado");
+    assert.equal(existsSync(join(FIN, ".antes")), false, "a cópia do financeiro antigo é apagada: ele saiu do meu-bot");
     assert.match(readFileSync(join(FIN, "backend.mjs"), "utf8"), /serviço do módulo/);
     assert.equal(JSON.parse(readFileSync(join(FIN, "package.json"), "utf8")).version, "2.0.0");
     assert.ok(existsSync(join(HOME, ".claude/skills/finance-api/SKILL.md")));
@@ -116,16 +119,16 @@ test("instalar e desinstalar de verdade: serviço no ar, financeiro antigo guard
     const t = spawnSync("bash", [join(MOD, "testar.sh")], { cwd: MOD, env, encoding: "utf8" });
     assert.match(t.stdout, /^ferramenta\tlancar\t/m);
     assert.match(t.stdout, /^teste=erro .*licença/m, "sem backend do meu-bot, a licença não libera");
-    // Ligar de novo não perde o antigo guardado.
+    // Ligar de novo é idempotente.
     assert.equal(spawnSync("bash", [join(MOD, "instalar.sh")], { cwd: MOD, env, encoding: "utf8", timeout: 60_000 }).status, 0);
-    assert.equal(readFileSync(join(FIN, ".antes", "backend.mjs"), "utf8"), "// antigo\n");
+    assert.equal(existsSync(join(FIN, ".antes")), false);
   } finally {
-    const des = spawnSync("bash", [join(MOD, "desinstalar.sh")], { cwd: MOD, env, encoding: "utf8", timeout: 60_000 });
+    des = spawnSync("bash", [join(MOD, "desinstalar.sh")], { cwd: MOD, env, encoding: "utf8", timeout: 60_000 });
     assert.equal(des.status, 0, des.stdout + des.stderr);
   }
   assert.equal(existsSync(join(FIN, "MODULO")), false);
-  assert.equal(readFileSync(join(FIN, "backend.mjs"), "utf8"), "// antigo\n", "o antigo devolvido");
-  assert.equal(JSON.parse(readFileSync(join(FIN, "package.json"), "utf8")).version, "1.4.0");
+  assert.doesNotMatch(readFileSync(join(FIN, "backend.mjs"), "utf8"), /^\/\/ antigo/, "o plugin antigo não volta: o backend não tem mais a API dele");
+  assert.match(des.stdout, /serviço do Finanças parado/);
   assert.equal(readFileSync(join(FIN, "db", "lancamentos.json"), "utf8"), "[]\n", "os dados ficam");
   await new Promise((r) => setTimeout(r, 300));
   await assert.rejects(fetch(`http://127.0.0.1:${porta}/v1/saude`), "o serviço parou");

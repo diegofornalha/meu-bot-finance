@@ -3,8 +3,8 @@
 #  1. o serviço (API /v1/finance e a página) em $MODULO_DIR/app, rodando só em 127.0.0.1:$PORTA (systemd de usuário;
 #     sem ele, nohup);
 #  2. o plugin do WhatsApp e a CLI do agente na pasta de sempre (~/.local/share/meu-bot/finance), agora falando com o
-#     serviço do módulo. Os arquivos antigos vão para finance/.antes (o desinstalar.sh os devolve) e o marcador
-#     finance/MODULO tira o financeiro antigo do backend do caminho;
+#     serviço do módulo. O financeiro antigo saiu do meu-bot (issue #312): o que havia dele nessa pasta é trocado, e a
+#     cópia guardada por versões anteriores deste instalador (finance/.antes) é apagada;
 #  3. a skill finance-api do agente.
 # Os dados (finance/db) ficam onde estão e nunca são apagados. Idempotente.
 set -euo pipefail
@@ -25,16 +25,13 @@ rm -rf "$APP"; mv "$APP.novo" "$APP"
 chmod -R go-rwx "$MODULO_DIR"
 echo "serviço do Finanças copiado"
 
-# 2. Plugin e CLI na pasta de sempre (os antigos guardados uma vez, para voltar ao desligar).
+# 2. Plugin e CLI na pasta de sempre. O financeiro antigo não existe mais no backend: não há para o que voltar.
 mkdir -p "$FIN/db"; chmod 700 "$FIN" "$FIN/db"
-if [ ! -f "$FIN/MODULO" ] && [ ! -d "$FIN/.antes" ]; then
-  mkdir -p "$FIN/.antes"
-  for f in index.js regras.mjs backend.mjs finance.mjs package.json openclaw.plugin.json; do [ -f "$FIN/$f" ] && cp "$FIN/$f" "$FIN/.antes/"; done
-fi
+rm -rf "$FIN/.antes"
 for f in index.js regras.mjs backend.mjs finance.mjs package.json openclaw.plugin.json; do cp "$HERE/plugin/$f" "$FIN/"; done
 chmod 644 "$FIN"/*.js "$FIN"/*.mjs "$FIN"/*.json; chmod 755 "$FIN/finance.mjs"
 echo financas > "$FIN/MODULO"
-echo "plugin e CLI do Finanças no lugar (o financeiro antigo do backend sai do caminho)"
+echo "plugin e CLI do Finanças no lugar"
 
 # 3. Skill do agente (mantida se você a editou: sem o marcador de versão do meu-bot).
 SK="$HOME/.claude/skills/finance-api/SKILL.md"
