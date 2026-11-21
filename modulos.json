@@ -5,7 +5,7 @@
       "id": "financas",
       "rotulo": "Finanças",
       "descricao": "O agente vira o seu financeiro: você conta o gasto (ou manda a foto do comprovante) e ele lança, categoriza e só pede o que depende de você. Página própria com o mês, as contas, o DRE e a Curva ABC.",
-      "versao": "2.0.0",
+      "versao": "2.0.1",
       "pasta": "financas",
       "testar": "testar.sh",
       "categoria": "Finanças",
@@ -16,7 +16,7 @@
         "paraQue": "Seu financeiro pessoal no WhatsApp e no chat do app: o agente lança gastos e rendas, lê comprovantes, separa por categoria e conta, acompanha o orçamento do mês e cobra só o que depende de você.",
         "cuidados": [
           "Seus números ficam só na máquina (pasta finance/db), com cópia no Google Drive se o backup estiver ligado.",
-          "Desligar o módulo não apaga nada: o financeiro volta para a página Finanças de antes, com os mesmos dados.",
+          "Desligar o módulo não apaga nada: os seus números ficam na máquina e voltam quando você ligar de novo.",
           "Lançamento com dúvida (categoria nova, foto, possível repetição) espera você confirmar na página."
         ],
         "texto": [
